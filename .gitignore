@@ -49,31 +49,35 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
+venv/
+.venv/
+ENV/
 *.egg-info/
 dist/
 build/
 
 # Django
 *.log
+*.pot
 db.sqlite3
 db.sqlite3-journal
-/media
-/staticfiles
-.env
-.env.dev
-.env.prod
+media/
+staticfiles/
 
 # Virtual Environment
-venv/
-env/
-.venv/
-ENV/
+.env.dev
+backend/.env.dev
+backend/flexbnb_backend/.env
+backend/flexbnb_backend/.env.dev
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
-# Mac
+# OS
 .DS_Store
+Thumbs.db
