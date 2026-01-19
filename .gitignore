@@ -52,32 +52,28 @@ __pycache__/
 env/
 venv/
 .venv/
-ENV/
 *.egg-info/
+.eggs/
 dist/
 build/
 
 # Django
 *.log
-*.pot
+local_settings.py
 db.sqlite3
-db.sqlite3-journal
 media/
-staticfiles/
 
-# Virtual Environment
-.env.dev
-backend/.env.dev
-backend/flexbnb_backend/.env
-backend/flexbnb_backend/.env.dev
+# Backend virtual environment
+backend/flexbnb_backend/env/
+backend/flexbnb_backend/venv/
+backend/flexbnb_backend/__pycache__/
+backend/flexbnb_backend/*/__pycache__/
+backend/flexbnb_backend/*/migrations/__pycache__/
+backend/flexbnb_backend/db.sqlite3
+backend/flexbnb_backend/media/
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
 *.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
