@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Bars3Icon, BellIcon } from '@heroicons/react/24/outline';
 import { useUser } from '@clerk/nextjs';
 import Sidebar from './Sidebar';
+import MessagesIcon from '../Messaging/MessagesIcon';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -49,6 +50,11 @@ const DashboardLayout = ({ children, title, subtitle }: DashboardLayoutProps) =>
             </div>
 
             <div className="flex items-center space-x-4">
+              {/* Messages */}
+              <div className="text-gray-600">
+                <MessagesIcon className="hover:text-blue-600" />
+              </div>
+              
               {/* Notifications */}
               <button className="p-2 text-gray-400 hover:text-gray-500 relative">
                 <BellIcon className="h-6 w-6" />

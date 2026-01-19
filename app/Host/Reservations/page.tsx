@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/nextjs";
 import { 
   CalendarIcon, 
   UserIcon, 
@@ -12,6 +12,7 @@ import {
 import DashboardLayout from '../../components/Host/DashboardLayout';
 import DataTable from '../../components/Host/DataTable';
 import StatsCard from '../../components/Host/StatsCard';
+import toast from 'react-hot-toast';
 
 interface Reservation {
   id: string;
@@ -28,76 +29,168 @@ interface Reservation {
   check_in_date: string;
   check_out_date: string;
   guests_count: number;
-  total_price: number;
+  total_price: number | string;
   status: string;
   special_requests: string;
   created_at: string;
 }
 
 const ReservationsPage = () => {
+  const { getToken, isSignedIn } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('');
 
-  useEffect(() => {
-    // Mock data for demonstration
-    const mockReservations: Reservation[] = [
-      {
-        id: '1',
-        property: { id: '1', title: 'Modern Apartment Downtown', image_url: '/placeholder.jpg' },
-        guest: { id: '1', email: 'ali@example.com', name: 'ali' },
-        check_in_date: '2024-02-15',
-        check_out_date: '2024-02-18',
-        guests_count: 2,
-        total_price: 450.00,
-        status: 'approved',
-        special_requests: 'Late check-in requested',
-        created_at: '2024-02-10T10:30:00Z'
-      },
-      {
-        id: '2',
-        property: { id: '2', title: 'Cozy Studio', image_url: '/placeholder.jpg' },
-        guest: { id: '2', email: 'ali@example.com', name: 'ali' },
-        check_in_date: '2024-02-20',
-        check_out_date: '2024-02-22',
-        guests_count: 1,
-        total_price: 280.00,
-        status: 'pending',
-        special_requests: '',
-        created_at: '2024-02-12T14:15:00Z'
-      },
-      {
-        id: '3',
-        property: { id: '1', title: 'Modern Apartment Downtown', image_url: '/placeholder.jpg' },
-        guest: { id: '3', email: 'ali@example.com', name: 'ali' },
-        check_in_date: '2024-01-25',
-        check_out_date: '2024-01-28',
-        guests_count: 3,
-        total_price: 675.00,
-        status: 'completed',
-        special_requests: 'Extra towels needed',
-        created_at: '2024-01-20T09:00:00Z'
+  const fetchReservations = async () => {
+    if (!isSignedIn) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await getToken();
+      if (!token) {
+        setLoading(false);
+        return;
       }
-    ];
 
-    setReservations(mockReservations);
-    setLoading(false);
-  }, []);
+      const url = statusFilter 
+        ? `${process.env.NEXT_PUBLIC_API_HOST}/api/booking/reservations/?status=${statusFilter}`
+        : `${process.env.NEXT_PUBLIC_API_HOST}/api/booking/reservations/`;
 
-  const handleApprove = (reservationId: string) => {
-    setReservations(prev => 
-      prev.map(res => 
-        res.id === reservationId ? { ...res, status: 'approved' } : res
-      )
-    );
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      console.log('[RESERVATIONS] API Response Status:', response.status);
+      console.log('[RESERVATIONS] API URL:', url);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[RESERVATIONS] API Error:', errorText);
+        throw new Error(`Failed to fetch reservations: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[RESERVATIONS] API Response Data:', data);
+      console.log('[RESERVATIONS] Data Type:', Array.isArray(data) ? 'Array' : typeof data);
+      console.log('[RESERVATIONS] Data Length:', Array.isArray(data) ? data.length : 'N/A');
+      
+      // Handle both array and object with results property
+      const reservationsData = Array.isArray(data) 
+        ? data 
+        : (data.results || data.data || []);
+      
+      console.log('[RESERVATIONS] Processed Reservations:', reservationsData.length);
+      
+      // Normalize data - ensure total_price is a number (DecimalField from backend comes as string)
+      const normalizedReservations = reservationsData.map((res: any) => ({
+        ...res,
+        total_price: typeof res.total_price === 'string' 
+          ? parseFloat(res.total_price) 
+          : (typeof res.total_price === 'number' ? res.total_price : 0),
+        guests_count: typeof res.guests_count === 'string' 
+          ? parseInt(res.guests_count, 10) 
+          : (typeof res.guests_count === 'number' ? res.guests_count : 0),
+      }));
+      
+      console.log('[RESERVATIONS] Normalized Reservations:', normalizedReservations);
+      setReservations(normalizedReservations);
+    } catch (error) {
+      console.error('Error fetching reservations:', error);
+      toast.error('Failed to load reservations');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDecline = (reservationId: string) => {
-    setReservations(prev => 
-      prev.map(res => 
-        res.id === reservationId ? { ...res, status: 'declined' } : res
-      )
-    );
+  useEffect(() => {
+    fetchReservations();
+  }, [statusFilter, isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Listen for new reservation events
+  useEffect(() => {
+    const handleNewReservation = () => {
+      fetchReservations();
+      toast.success('New reservation received!');
+    };
+
+    window.addEventListener('reservationCreated', handleNewReservation);
+
+    return () => {
+      window.removeEventListener('reservationCreated', handleNewReservation);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleApprove = async (reservationId: string) => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_HOST}/api/booking/reservations/${reservationId}/status/`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ status: 'approved' }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to approve reservation');
+      }
+
+      toast.success('Reservation approved successfully!');
+      fetchReservations(); // Refresh the list
+    } catch (error) {
+      console.error('Error approving reservation:', error);
+      toast.error('Failed to approve reservation');
+    }
+  };
+
+  const handleDecline = async (reservationId: string) => {
+    try {
+      const token = await getToken();
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_HOST}/api/booking/reservations/${reservationId}/status/`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ status: 'declined' }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to decline reservation');
+      }
+
+      toast.success('Reservation declined');
+      fetchReservations(); // Refresh the list
+    } catch (error) {
+      console.error('Error declining reservation:', error);
+      toast.error('Failed to decline reservation');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -160,7 +253,17 @@ const ReservationsPage = () => {
       key: 'total_price',
       label: 'Amount',
       sortable: true,
-      render: (value: number) => `$${value.toFixed(2)}`
+      render: (value: any) => {
+        // Handle different value types
+        if (value === null || value === undefined) {
+          return '$0.00';
+        }
+        const numValue = typeof value === 'string' ? parseFloat(value) : Number(value);
+        if (isNaN(numValue)) {
+          return '$0.00';
+        }
+        return `$${numValue.toFixed(2)}`;
+      }
     },
     {
       key: 'status',

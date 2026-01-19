@@ -68,3 +68,16 @@ def __str__(self):
         return self.email
 
     
+
+class Wishlist(models.Model):
+    user = models.ForeignKey(User, related_name='wishlist', on_delete=models.CASCADE)
+    property = models.ForeignKey('property.Property', related_name='wishlisted_by', on_delete=models.CASCADE)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'property')
+
+    def __str__(self):
+        return f"{self.user.email} wishlisted {self.property.title}"
+
+    

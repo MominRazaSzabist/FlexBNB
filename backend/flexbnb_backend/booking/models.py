@@ -112,7 +112,7 @@ class PropertyAnalytics(models.Model):
 
 class PropertyReview(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    property = models.ForeignKey(Property, related_name='reviews', on_delete=models.CASCADE)
+    property = models.ForeignKey(Property, related_name='property_reviews', on_delete=models.CASCADE)
     reservation = models.OneToOneField(Reservation, related_name='review', on_delete=models.CASCADE)
     guest = models.ForeignKey(User, related_name='reviews_given', on_delete=models.CASCADE)
     
@@ -131,3 +131,26 @@ class PropertyReview(models.Model):
     
     class Meta:
         ordering = ['-created_at'] 
+
+
+class Offer(models.Model):
+    property = models.ForeignKey('property.Property', related_name='offers', on_delete=models.CASCADE)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    discount_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    valid_from = models.DateField()
+    valid_to = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+class Invoice(models.Model):
+    reservation = models.OneToOneField(Reservation, related_name='invoice', on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    paid = models.BooleanField(default=False)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Invoice for reservation {self.reservation.id}"

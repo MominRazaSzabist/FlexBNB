@@ -15,6 +15,10 @@ import {
   UserButton,
 } from '@clerk/nextjs'
 import { Toaster } from 'react-hot-toast';
+import MessageModal from "./components/Messaging/MessageModal";
+import FloatingMessageButton from "./components/Messaging/FloatingMessageButton";
+import FloatingChatWidget from "./components/Messaging/FloatingChatWidget";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -35,37 +39,21 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const Content =(
-      <p>hahah</p>
-  )
   return (
     <ClerkProvider>
-      <>
-        <html lang="en">
-          <body
-            className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-          >
-            <Navbar/>
-            <AddPropertyModal/>
-            <Toaster />
-            <div className="pt-24">
+      <html lang="en">
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        >
+          <Navbar/>
+          <AddPropertyModal/>
+          <FloatingChatWidget />
+          <Toaster />
+          <div className="pt-24">
             {children}
-            </div>
-            {/* <Modals
-            label="sadsa"
-            Content={Content}
-            isOpen={true}
-            /> */}
-            {/* <LoginModal/> */}
-            <SignedOut>
-              <SignInButton />
-              <SignUpButton />
-            </SignedOut>
-            
-            {/* <SignUpModal/> */}
-          </body>
-        </html>
-      </>
+          </div>
+        </body>
+      </html>
     </ClerkProvider>
   );
 }

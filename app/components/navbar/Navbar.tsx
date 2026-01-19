@@ -5,6 +5,9 @@ import Link from 'next/link';
 import Searchfilterss from './Searchfilterss';
 import UserNav from './UserNav';
 import AddPropertyButton from './AddPropertyButton';
+import MessagesIcon from '../Messaging/MessagesIcon';
+import SustainabilityMenu from './SustainabilityMenu';
+import { SignedIn } from '@clerk/nextjs';
 
 const Navbar = () => {
     return (
@@ -22,7 +25,11 @@ const Navbar = () => {
                     <div className="flex space-x-6">
                         <Searchfilterss />
                     </div>
-                    <div className="flex items-center space-x-6 text-white">
+                    <div className="flex items-center space-x-4 text-white">
+                        <SustainabilityMenu />
+                        <SignedIn>
+                            <MessagesIcon />
+                        </SignedIn>
                         <AddPropertyButton />
                         <UserNav />
                     </div>

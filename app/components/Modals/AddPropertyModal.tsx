@@ -33,7 +33,10 @@ const AddPropertyModal = () => {
 
   const addPropertyModal = UseAddPropertyModal();
   const router = useRouter();
-  const { getToken, isSignedIn } = useAuth(); // Use hook inside the component
+  const enableClerk = process.env.NEXT_PUBLIC_ENABLE_CLERK === '1';
+  const auth = enableClerk ? useAuth() : null;
+  const isSignedIn = enableClerk ? auth!.isSignedIn : false;
+  const getToken = enableClerk ? auth!.getToken : async () => null;
 
   const setCategory = (category: string) => setDataCategory(category);
 
@@ -45,7 +48,9 @@ const AddPropertyModal = () => {
 
   const submitForm = async () => {
     if (!isSignedIn) {
-      toast.error('You must be signed in to add a property.');
+      toast.error(enableClerk
+        ? 'You must be signed in to add a property.'
+        : 'Property creation is disabled while Clerk is off in local dev.');
       return;
     }
 
@@ -131,8 +136,16 @@ const AddPropertyModal = () => {
 
       if (response.success) {
         toast.success(response.message || 'Property added successfully!');
+        // Dispatch event to refresh host properties page if open
+        window.dispatchEvent(new CustomEvent('propertyAdded'));
         router.refresh(); // Refresh the page to show the new property
         addPropertyModal.close();
+        // If on host properties page, redirect to refresh
+        if (window.location.pathname.includes('/Host/Properties')) {
+          setTimeout(() => {
+            window.location.reload();
+          }, 500);
+        }
       } else {
         // Handle known error responses
         if (response.errors) {

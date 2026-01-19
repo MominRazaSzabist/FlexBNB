@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import { SignedIn, SignedOut, SignInButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, SignInButton, useAuth } from "@clerk/nextjs";
 import { 
   HomeIcon, 
   CurrencyDollarIcon, 
@@ -52,68 +52,83 @@ const HostDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        
-        // For demo purposes, using mock data
-        setStats({
-          total_properties: 5,
-          total_reservations: 24,
-          pending_requests: 3,
-          total_earnings: 12500.00,
-          this_month_earnings: 2450.00,
-          occupancy_rate: 78,
-          average_rating: 4.6,
-          unread_messages: 2
-        });
+  const { getToken, userId } = useAuth();
+  const API_HOST = process.env.NEXT_PUBLIC_API_HOST || 'http://localhost:8000';
 
-        setRecentReservations([
-          {
-            id: '1',
-            property: { id: '1', title: 'Modern Apartment Downtown', image_url: '/placeholder.jpg' },
-            guest: { id: '1', email: 'john@example.com', name: 'John Doe' },
-            check_in_date: '2024-02-15',
-            check_out_date: '2024-02-18',
-            total_price: 450.00,
-            status: 'approved',
-            created_at: '2024-02-10'
-          }
-        ]);
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
 
-        setPendingRequests([
-          {
-            id: '2',
-            property: { id: '2', title: 'Cozy Studio', image_url: '/placeholder.jpg' },
-            guest: { id: '2', email: 'jane@example.com', name: 'Jane Smith' },
-            check_in_date: '2024-02-20',
-            check_out_date: '2024-02-22',
-            total_price: 280.00,
-            status: 'pending',
-            created_at: '2024-02-12'
-          }
-        ]);
-
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch dashboard data');
-        console.error('Dashboard error:', err);
-      } finally {
+      const token = await getToken();
+      if (!userId || !token) {
         setLoading(false);
+        return;
       }
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const statsRes = await fetch(`${API_HOST}/api/booking/dashboard/stats/`, { headers, credentials: 'include' });
+      if (!statsRes.ok) throw new Error('Failed to fetch dashboard stats');
+      const statsData = await statsRes.json();
+      setStats(statsData);
+
+      const reservationsRes = await fetch(`${API_HOST}/api/booking/reservations/`, { headers, credentials: 'include' });
+      if (!reservationsRes.ok) throw new Error('Failed to fetch reservations');
+      const reservationsData = await reservationsRes.json();
+      setRecentReservations(Array.isArray(reservationsData) ? reservationsData.slice(0, 5) : []);
+
+      const pendingRes = await fetch(`${API_HOST}/api/booking/reservations/?status=pending`, { headers, credentials: 'include' });
+      if (!pendingRes.ok) throw new Error('Failed to fetch pending reservations');
+      const pendingData = await pendingRes.json();
+      setPendingRequests(Array.isArray(pendingData) ? pendingData : []);
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch dashboard data');
+      console.error('Dashboard error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [getToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Listen for new reservation events
+  useEffect(() => {
+    const handleNewReservation = () => {
+      fetchDashboardData();
     };
 
-    fetchDashboardData();
-  }, []);
+    window.addEventListener('reservationCreated', handleNewReservation);
+
+    return () => {
+      window.removeEventListener('reservationCreated', handleNewReservation);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleApproveReservation = async (reservationId: string) => {
     try {
-      // For demo purposes, just update the local state
-      setPendingRequests(prev => 
-        prev.map(req => 
-          req.id === reservationId ? { ...req, status: 'approved' } : req
-        ).filter(req => req.status === 'pending')
+      const token = await getToken();
+      if (!token) return;
+
+      const response = await fetch(
+        `${API_HOST}/api/booking/reservations/${reservationId}/status/`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ status: 'approved' }),
+        }
       );
+
+      if (!response.ok) throw new Error('Failed to approve reservation');
+
+      // Refresh dashboard data
+      fetchDashboardData();
     } catch (err) {
       console.error('Error approving reservation:', err);
     }
@@ -121,10 +136,26 @@ const HostDashboard = () => {
 
   const handleDeclineReservation = async (reservationId: string) => {
     try {
-      // For demo purposes, just update the local state
-      setPendingRequests(prev => 
-        prev.filter(req => req.id !== reservationId)
+      const token = await getToken();
+      if (!token) return;
+
+      const response = await fetch(
+        `${API_HOST}/api/booking/reservations/${reservationId}/status/`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ status: 'declined' }),
+        }
       );
+
+      if (!response.ok) throw new Error('Failed to decline reservation');
+
+      // Refresh dashboard data
+      fetchDashboardData();
     } catch (err) {
       console.error('Error declining reservation:', err);
     }
@@ -297,16 +328,31 @@ const HostDashboard = () => {
                     Quick Actions
                   </h3>
                   <div className="space-y-3">
-                    <button className="w-full text-left p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors">
+                    <button 
+                      onClick={() => window.location.href = '/Host/Properties'}
+                      className="w-full text-left p-3 rounded-lg bg-blue-50 hover:bg-blue-100 transition-colors"
+                    >
                       <div className="flex items-center space-x-3">
                         <HomeIcon className="h-5 w-5 text-blue-600" />
-                        <span className="text-sm font-medium text-blue-900">Add New Property</span>
+                        <span className="text-sm font-medium text-blue-900">My Properties</span>
                       </div>
                     </button>
-                    <button className="w-full text-left p-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors">
+                    <button 
+                      onClick={() => window.location.href = '/Host/Properties/Add'}
+                      className="w-full text-left p-3 rounded-lg bg-green-50 hover:bg-green-100 transition-colors"
+                    >
                       <div className="flex items-center space-x-3">
-                        <CurrencyDollarIcon className="h-5 w-5 text-green-600" />
-                        <span className="text-sm font-medium text-green-900">View Earnings</span>
+                        <HomeIcon className="h-5 w-5 text-green-600" />
+                        <span className="text-sm font-medium text-green-900">Add New Property</span>
+                      </div>
+                    </button>
+                    <button 
+                      onClick={() => window.location.href = '/Host/Earnings'}
+                      className="w-full text-left p-3 rounded-lg bg-purple-50 hover:bg-purple-100 transition-colors"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <CurrencyDollarIcon className="h-5 w-5 text-purple-600" />
+                        <span className="text-sm font-medium text-purple-900">View Earnings</span>
                       </div>
                     </button>
                     <button className="w-full text-left p-3 rounded-lg bg-purple-50 hover:bg-purple-100 transition-colors">
@@ -391,4 +437,4 @@ const HostDashboard = () => {
   );
 };
 
-export default HostDashboard; 
+export default HostDashboard;

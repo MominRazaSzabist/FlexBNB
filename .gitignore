@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# clerk configuration (can include secrets)
+/.clerk/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -49,17 +52,28 @@ __pycache__/
 env/
 venv/
 .venv/
-ENV/
 *.egg-info/
-*.egg
 .eggs/
+dist/
+build/
 
 # Django
 *.log
-*.pot
-*.pyc
+local_settings.py
 db.sqlite3
 media/
 
 # Backend virtual environment
 backend/flexbnb_backend/env/
+backend/flexbnb_backend/venv/
+backend/flexbnb_backend/__pycache__/
+backend/flexbnb_backend/*/__pycache__/
+backend/flexbnb_backend/*/migrations/__pycache__/
+backend/flexbnb_backend/db.sqlite3
+backend/flexbnb_backend/media/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

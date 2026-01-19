@@ -8,6 +8,8 @@ from .models import (
 )
 from property.models import Property
 from useraccount.models import User
+from .models import Offer, Invoice
+from useraccount.models import Wishlist
 
 
 class PropertyBasicSerializer(serializers.ModelSerializer):
@@ -103,3 +105,36 @@ class HostDashboardStatsSerializer(serializers.Serializer):
     occupancy_rate = serializers.DecimalField(max_digits=5, decimal_places=2)
     average_rating = serializers.DecimalField(max_digits=3, decimal_places=2)
     unread_messages = serializers.IntegerField() 
+
+
+class OfferSerializer(serializers.ModelSerializer):
+    property = PropertyBasicSerializer(read_only=True)
+
+    class Meta:
+        model = Offer
+        fields = '__all__'
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    reservation = ReservationSerializer(read_only=True)
+
+    class Meta:
+        model = Invoice
+        fields = '__all__'
+
+
+class WishlistSerializer(serializers.ModelSerializer):
+    property = PropertyBasicSerializer(read_only=True)
+
+    class Meta:
+        model = Wishlist
+        fields = ['id', 'property', 'added_at']
+
+
+class GuestDashboardStatsSerializer(serializers.Serializer):
+    total_reservations = serializers.IntegerField()
+    upcoming_trips = serializers.IntegerField()
+    total_spent = serializers.DecimalField(max_digits=12, decimal_places=2)
+    wishlist_count = serializers.IntegerField()
+    unread_messages = serializers.IntegerField()
+    average_rating_given = serializers.DecimalField(max_digits=3, decimal_places=2)

@@ -8,6 +8,8 @@ urlpatterns = [
     path('api/properties/', include('property.urls')),
     path('api/auth/', include('useraccount.urls')),
     path('api/booking/', include('booking.urls')),
+    path('api/messaging/', include('messaging.urls')),
+    path('api/sustainability/', include('sustainability.urls')),
 ]
 
 if settings.DEBUG:

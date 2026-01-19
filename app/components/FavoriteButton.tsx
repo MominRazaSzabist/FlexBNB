@@ -1,6 +1,7 @@
 'use client';
 
-import apiService from "../services/apiService";
+import apiService from "./services/apiService";
+import { useAuth } from '@clerk/nextjs';
 
 interface FavoriteButtonProps {
     id: string;
@@ -13,10 +14,14 @@ const FavoriteButton: React.FC<FavoriteButtonProps> = ({
     is_favorite,
     markFavorite
 }) => {
+    const { getToken } = useAuth();
+
     const toggleFavorite = async (e: React.MouseEvent<HTMLDivElement>) => {
         e.stopPropagation();
 
-        const response = await apiService.post(`/api/properties/${id}/toggle_favorite/`, {})
+        const token = await getToken();
+
+        const response = await apiService.post(`/api/properties/${id}/toggle_favorite/`, {}, token)
 
         markFavorite(response.is_favorite);
     }

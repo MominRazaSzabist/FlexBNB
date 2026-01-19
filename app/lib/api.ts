@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000/api';
+const API_BASE_URL = `${process.env.NEXT_PUBLIC_API_HOST || 'http://localhost:8000'}/api`;
 
 // Helper function to get auth headers
 const getAuthHeaders = async (): Promise<Record<string, string>> => {
@@ -6,18 +6,21 @@ const getAuthHeaders = async (): Promise<Record<string, string>> => {
     'Content-Type': 'application/json',
   };
 
-  // Get Clerk token
+  // Try to get Clerk JWT from the browser
   if (typeof window !== 'undefined') {
     try {
-      const { useAuth } = await import('@clerk/nextjs');
-      // For server-side or static usage, we'll handle auth differently
-      // This is a simplified version - in production you'd want to use useAuth hook properly
-      return headers;
+      const clerk: any = (window as any).Clerk;
+      if (clerk?.session) {
+        const token = await clerk.session.getToken();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+      }
     } catch (error) {
-      console.error('Error getting auth token:', error);
+      console.error('Error getting Clerk token from window:', error);
     }
   }
-  
+
   return headers;
 };
 
@@ -127,4 +130,16 @@ export const hostAPI = {
     if (!response.ok) throw new Error('Failed to fetch properties');
     return response.json();
   },
-}; 
+};
+
+export const guestAPI = {
+  getDashboardStats: async () => {
+    const headers = await getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/booking/guest/dashboard/stats/`, {
+      headers,
+    });
+    if (!response.ok) throw new Error('Failed to fetch guest dashboard stats');
+    return response.json();
+  },
+  // Add other guest-specific methods as needed
+};

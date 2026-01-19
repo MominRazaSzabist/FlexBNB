@@ -29,24 +29,28 @@ import {
   SwatchIcon
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid, StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
+import { useAuth } from '@clerk/nextjs';
+import toast from 'react-hot-toast';
+import ContactHostButton from '@/app/components/Messaging/ContactHostButton';
+import GreenBadge from '@/app/components/Sustainability/GreenBadge';
 
 const PropertyDetailPage = () => {
     const params = useParams();
+    const { getToken, isSignedIn } = useAuth();
     const [property, setProperty] = useState<any>(null);
     const [isLiked, setIsLiked] = useState(false);
+    const [loadingFavorite, setLoadingFavorite] = useState(false);
     const [showAllPhotos, setShowAllPhotos] = useState(false);
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [showAllAmenities, setShowAllAmenities] = useState(false);
     const [showAllReviews, setShowAllReviews] = useState(false);
 
-    // Mock data for demonstration
-    const mockImages = [
-        property?.image_url || "/api/placeholder/800/600",
-        "/api/placeholder/800/600",
-        "/api/placeholder/800/600", 
-        "/api/placeholder/800/600",
-        "/api/placeholder/800/600"
-    ];
+    // Get all images - prioritize image_urls, fallback to image_url, then placeholder
+    const images = property?.image_urls && property.image_urls.length > 0
+        ? property.image_urls
+        : property?.image_url
+            ? [property.image_url]
+            : ['https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop'];
 
     const mockAmenities = [
         { name: "WiFi", iconName: "WifiIcon", available: true },
@@ -102,12 +106,102 @@ const PropertyDetailPage = () => {
         }
     }, [params?.id]);
 
+    // Check if property is already saved
+    useEffect(() => {
+        const checkSavedStatus = async () => {
+            if (!isSignedIn || !params?.id) return;
+            
+            try {
+                const token = await getToken();
+                if (!token) return;
+
+                // Check saved listings to see if this property is saved
+                const savedRes = await fetch(
+                    `${process.env.NEXT_PUBLIC_API_HOST}/api/properties/saved/`,
+                    {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                        },
+                        credentials: 'include',
+                    }
+                );
+                
+                if (savedRes.ok) {
+                    const savedData = await savedRes.json();
+                    const isSaved = savedData.results?.some((p: any) => p.id === params.id);
+                    setIsLiked(isSaved || false);
+                }
+            } catch (error) {
+                console.error('Error checking saved status:', error);
+            }
+        };
+
+        checkSavedStatus();
+    }, [isSignedIn, params?.id, getToken]);
+
+    const handleToggleFavorite = async () => {
+        if (!isSignedIn) {
+            toast.error('Please sign in to save properties');
+            return;
+        }
+
+        try {
+            setLoadingFavorite(true);
+            const token = await getToken();
+            if (!token) {
+                toast.error('Authentication required');
+                return;
+            }
+
+            const res = await fetch(
+                `${process.env.NEXT_PUBLIC_API_HOST}/api/properties/${params.id}/toggle_favorite/`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                }
+            );
+
+            // Get response data even if not ok
+            let data;
+            try {
+                data = await res.json();
+            } catch (e) {
+                data = { error: 'Invalid response from server' };
+            }
+
+            if (!res.ok) {
+                const errorMessage = data.error || data.message || `Server error: ${res.status}`;
+                console.error('Save property error:', errorMessage, data);
+                throw new Error(errorMessage);
+            }
+
+            setIsLiked(data.is_favorite || false);
+            
+            // Trigger a custom event to refresh saved listings
+            window.dispatchEvent(new CustomEvent('propertySaved', { 
+                detail: { propertyId: params.id, isSaved: data.is_favorite } 
+            }));
+            
+            toast.success(data.is_favorite ? 'Property saved!' : 'Property removed from saved');
+        } catch (error: any) {
+            console.error('Error toggling favorite:', error);
+            const errorMessage = error.message || 'Failed to save property. Please try again.';
+            toast.error(errorMessage);
+        } finally {
+            setLoadingFavorite(false);
+        }
+    };
+
     const nextImage = () => {
-        setCurrentImageIndex((prev) => (prev + 1) % mockImages.length);
+        setCurrentImageIndex((prev) => (prev + 1) % images.length);
     };
 
     const prevImage = () => {
-        setCurrentImageIndex((prev) => (prev - 1 + mockImages.length) % mockImages.length);
+        setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
     };
 
     if (!property) {
@@ -143,7 +237,7 @@ const PropertyDetailPage = () => {
                 
                 <div className="relative w-4/5 h-4/5">
                     <Image
-                        src={mockImages[currentImageIndex]}
+                        src={images[currentImageIndex]}
                         alt={`Property image ${currentImageIndex + 1}`}
                         fill
                         className="object-cover rounded-lg"
@@ -158,7 +252,7 @@ const PropertyDetailPage = () => {
                 </button>
                 
                 <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white">
-                    {currentImageIndex + 1} / {mockImages.length}
+                    {currentImageIndex + 1} / {images.length}
                 </div>
             </div>
         </div>
@@ -196,7 +290,16 @@ const PropertyDetailPage = () => {
                 <div className="pt-6 pb-4">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <div className="min-w-0 flex-1">
-                            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 break-words">{property.title}</h1>
+                            <div className="flex items-start justify-between gap-4 mb-2">
+                                <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 break-words flex-1">{property.title}</h1>
+                                {property.green_certification && (
+                                    <GreenBadge 
+                                        level={property.green_certification.level}
+                                        status={property.green_certification.status}
+                                        size="medium"
+                                    />
+                                )}
+                            </div>
                             <div className="flex flex-wrap items-center mt-2 text-sm text-gray-600 gap-x-2">
                                 <div className="flex items-center">
                                     <StarIconSolid className="h-4 w-4 text-yellow-400 mr-1" />
@@ -218,10 +321,13 @@ const PropertyDetailPage = () => {
                                 <span className="hidden sm:inline">Share</span>
                             </button>
                             <button 
-                                onClick={() => setIsLiked(!isLiked)}
-                                className="flex items-center space-x-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+                                onClick={handleToggleFavorite}
+                                disabled={loadingFavorite}
+                                className="flex items-center space-x-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isLiked ? (
+                                {loadingFavorite ? (
+                                    <div className="h-4 w-4 sm:h-5 sm:w-5 border-2 border-gray-300 border-t-red-500 rounded-full animate-spin"></div>
+                                ) : isLiked ? (
                                     <HeartIconSolid className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
                                 ) : (
                                     <HeartIcon className="h-4 w-4 sm:h-5 sm:w-5" />
@@ -237,45 +343,50 @@ const PropertyDetailPage = () => {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-2 h-[300px] sm:h-[400px] lg:h-[500px]">
                         <div className="md:col-span-2 relative overflow-hidden rounded-xl md:rounded-l-xl md:rounded-r-none">
                             <Image
-                                src={mockImages[0]}
+                                src={images[0] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop"}
                                 alt="Main property image"
                                 fill
                                 className="object-cover hover:scale-105 transition-transform duration-300"
+                                unoptimized
                             />
                         </div>
                         <div className="hidden md:grid grid-cols-1 gap-2">
                             <div className="relative overflow-hidden">
                                 <Image
-                                    src={mockImages[1]}
+                                    src={images[1] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop"}
                                     alt="Property image 2"
                                     fill
                                     className="object-cover hover:scale-105 transition-transform duration-300"
+                                    unoptimized
                                 />
                             </div>
                             <div className="relative overflow-hidden">
                                 <Image
-                                    src={mockImages[2]}
+                                    src={images[2] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop"}
                                     alt="Property image 3"
                                     fill
                                     className="object-cover hover:scale-105 transition-transform duration-300"
+                                    unoptimized
                                 />
                             </div>
                         </div>
                         <div className="hidden md:grid grid-cols-1 gap-2">
                             <div className="relative overflow-hidden">
                                 <Image
-                                    src={mockImages[3]}
+                                    src={images[3] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop"}
                                     alt="Property image 4"
                                     fill
                                     className="object-cover hover:scale-105 transition-transform duration-300"
+                                    unoptimized
                                 />
                             </div>
                             <div className="relative overflow-hidden rounded-tr-xl rounded-br-xl">
                                 <Image
-                                    src={mockImages[4]}
+                                    src={images[4] || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&h=600&fit=crop"}
                                     alt="Property image 5"
                                     fill
                                     className="object-cover hover:scale-105 transition-transform duration-300"
+                                    unoptimized
                                 />
                                 <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                                     <button
@@ -341,6 +452,68 @@ const PropertyDetailPage = () => {
                                 )}
                             </div>
                         </div>
+
+                        {/* Green Certification Info */}
+                        {property.green_certification && (
+                            <div className="border-b border-gray-200 pb-6 sm:pb-8">
+                                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex items-center space-x-3">
+                                            <span className="text-3xl">🏅</span>
+                                            <div>
+                                                <h3 className="text-lg font-bold text-green-900">
+                                                    {property.green_certification.level?.charAt(0).toUpperCase() + property.green_certification.level?.slice(1)} Green Stay Certified
+                                                </h3>
+                                                <p className="text-sm text-green-700">
+                                                    This property meets our sustainability standards
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Link
+                                            href="/sustainability/green-certification"
+                                            className="text-sm text-green-600 hover:text-green-700 font-medium underline"
+                                        >
+                                            Learn more
+                                        </Link>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                                        {property.green_certification.energy_saving && (
+                                            <div className="flex items-center space-x-2 text-sm">
+                                                <span>💡</span>
+                                                <span className="text-gray-700">Energy Saving</span>
+                                            </div>
+                                        )}
+                                        {property.green_certification.water_conservation && (
+                                            <div className="flex items-center space-x-2 text-sm">
+                                                <span>💧</span>
+                                                <span className="text-gray-700">Water Conservation</span>
+                                            </div>
+                                        )}
+                                        {property.green_certification.recycling_program && (
+                                            <div className="flex items-center space-x-2 text-sm">
+                                                <span>♻️</span>
+                                                <span className="text-gray-700">Recycling</span>
+                                            </div>
+                                        )}
+                                        {property.green_certification.renewable_energy && (
+                                            <div className="flex items-center space-x-2 text-sm">
+                                                <span>⚡</span>
+                                                <span className="text-gray-700">Renewable Energy</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-green-200">
+                                        <Link
+                                            href="/sustainability/carbon-calculator"
+                                            className="inline-flex items-center space-x-2 text-sm text-green-700 hover:text-green-800 font-medium"
+                                        >
+                                            <span>🌍</span>
+                                            <span>Calculate your carbon footprint for this stay</span>
+                                        </Link>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Description */}
                         <div className="border-b border-gray-200 pb-6 sm:pb-8">
@@ -468,12 +641,13 @@ const PropertyDetailPage = () => {
                                             Welcome to my place! I'm a local host who loves sharing the beauty of this area with guests. 
                                             I'm always available to help make your stay memorable.
                                         </p>
-                                        <Link
-                                            href={`/hosts/${property.host?.id}`}
-                                            className="inline-flex items-center px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium text-xs sm:text-sm"
-                                        >
-                                            Contact Host
-                                        </Link>
+                                        <div className="w-full sm:w-auto">
+                                            <ContactHostButton
+                                                propertyId={property.id}
+                                                propertyTitle={property.title}
+                                                hostName={property.host?.name || property.Host?.name || property.Host?.email || 'Host'}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>

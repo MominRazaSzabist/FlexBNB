@@ -11,6 +11,7 @@ import {
   useUser,
   UserButton
 } from "@clerk/nextjs";
+import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline';
 
 const UserNav = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -51,6 +52,14 @@ const UserNav = () => {
               />
             </div>
 
+            <MenuLink
+              label="Messages"
+              icon={<ChatBubbleLeftRightIcon className="h-5 w-5" />}
+              onClick={() => {
+                window.location.href = "/Messages";
+                setIsOpen(false);
+              }}
+            />
             <MenuLink
               label="Host Dashboard"
               onClick={() => {
